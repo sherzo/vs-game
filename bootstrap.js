@@ -1,14 +1,21 @@
-const express = require('express')();
+const express = require("express")();
+const httpServer = require("http").createServer();
 
-const https = require('https'),
-  fs = require('fs');
+const https = require("https"),
+  fs = require("fs");
 
-const options = {
-  key: fs.readFileSync('/etc/letsencrypt/live/leameen.com/privkey.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/live/leameen.com/cert.pem'),
-  ca: fs.readFileSync('/etc/letsencrypt/live/leameen.com/chain.pem')
+let options = {};
+if (process.env.NODE_ENV === "production") {
+  options = {
+    key: fs.readFileSync("/etc/letsencrypt/live/leameen.com/privkey.pem"),
+    cert: fs.readFileSync("/etc/letsencrypt/live/leameen.com/cert.pem"),
+    ca: fs.readFileSync("/etc/letsencrypt/live/leameen.com/chain.pem"),
+  };
+}
+
+const httpsServer = https.createServer(options, express);
+
+module.exports = {
+  httpsServer,
+  httpServer,
 };
-
-const app = https.createServer(options, express);
-
-exports.default = app;

@@ -1,106 +1,99 @@
-const https = require('https'),
-  fs = require('fs');
+const { httpServer, httpsServer } = require("./bootstrap");
 
-const app = require('express')();
+const server = process.env.NODE_ENV === "production" ? httpsServer : httpServer;
 
-const options = {
-  key: fs.readFileSync('/etc/letsencrypt/archive/leameen.com/privkey2.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/archive/leameen.com/cert2.pem'),
-  ca: fs.readFileSync('/etc/letsencrypt/archive/leameen.com/chain2.pem')
-};
+io = require("socket.io")(server);
 
-const server = https.createServer(options, app);
-io = require('socket.io')(server);
-
-const UserController = require('./controllers/UserController');
-const { handlerError, getUsers, depureUsers, logger } = require('./functions');
+const UserController = require("./controllers/UserController");
+const { handlerError, getUsers, depureUsers, logger } = require("./functions");
 let usersOnline = new Map();
 
 setInterval(() => depureUsers(usersOnline), 10000);
 
-io.on('connection', function(socket) {
-  socket.on('USER/connected', user => {
+io.on("connection", function (socket) {
+  socket.on("USER/connected", (user) => {
+    console.log("user", user);
     UserController.add(usersOnline, user, socket.id)
-      .then(newUsersOnline => {
+      .then((newUsersOnline) => {
         usersOnline = newUsersOnline;
-        io.emit('USER/online', getUsers(usersOnline));
+        io.emit("USER/online", getUsers(usersOnline));
       })
       .catch(handlerError);
   });
 
-  socket.on('USER/disconnected', userId => {
+  socket.on("USER/disconnected", (userId) => {
     UserController.remove(usersOnline, userId, socket.id)
-      .then(newUsersOnline => {
+      .then((newUsersOnline) => {
         usersOnline = newUsersOnline;
-        io.emit('USER/online', getUsers(usersOnline));
+        io.emit("USER/online", getUsers(usersOnline));
       })
       .catch(handlerError);
   });
 
-  socket.on('USER/updated', user => {
-    logger('user', user);
+  socket.on("USER/updated", (user) => {
+    logger("user", user);
     UserController.update(usersOnline, user)
-      .then(newUsersOnline => {
+      .then((newUsersOnline) => {
         usersOnline = newUsersOnline;
-        io.emit('USER/online', getUsers(usersOnline));
+        io.emit("USER/online", getUsers(usersOnline));
       })
       .catch(handlerError);
   });
 
-  socket.on('GAME/request', ({ opponentId, user, game }) => {
-    logger('request', { opponentId, game });
+  socket.on("GAME/request", ({ opponentId, user, game }) => {
+    logger("request", { opponentId, game });
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/receive', {
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/receive", {
         opponent: user,
-        game
+        game,
       });
     });
   });
 
-  socket.on('GAME/refuse', ({ user, opponentId }) => {
+  socket.on("GAME/refuse", ({ user, opponentId }) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/refuse-request', user);
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/refuse-request", user);
     });
   });
 
-  socket.on('GAME/accept', ({ user, opponentId }) => {
+  socket.on("GAME/accept", ({ user, opponentId }) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/accept-request', user);
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/accept-request", user);
     });
   });
 
-  socket.on('GAME/cancel', opponentId => {
+  socket.on("GAME/cancel", (opponentId) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/cancel-request');
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/cancel-request");
     });
   });
 
-  socket.on('GAME/player-step', ({ step, opponentId }) => {
+  socket.on("GAME/player-step", ({ step, opponentId }) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/opponent-step', step);
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/opponent-step", step);
     });
   });
 
-  socket.on('GAME/win', opponentId => {
+  socket.on("GAME/win", (opponentId) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/lost');
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/lost");
     });
   });
 
-  socket.on('GAME/player-render', opponentId => {
+  socket.on("GAME/player-render", (opponentId) => {
     const sockets = usersOnline.get(opponentId).sockets;
-    sockets.forEach(socketUser => {
-      socket.to(socketUser).emit('GAME/opponent-render');
+    sockets.forEach((socketUser) => {
+      socket.to(socketUser).emit("GAME/opponent-render");
     });
   });
 });
 
 server.listen(process.env.PORT, () => {
-  console.log('Service is running in ' + process.env.PORT);
+  console.log("Service is running in " + process.env.PORT);
 });
